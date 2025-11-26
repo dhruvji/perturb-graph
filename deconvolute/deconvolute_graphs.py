@@ -13,22 +13,32 @@ import logging
 import multiprocessing
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, Any
 
 import pandas as pd
 
 # Global variables for worker processes
 _worker_graphs_data = None
 _worker_de_genes_by_target = None
+_worker_fold_changes = None
 
 
-def load_csv_data(csv_path: Path, fdr_threshold: float = 0.05) -> pd.DataFrame:
+def load_csv_data(
+    csv_path: Path, 
+    fdr_threshold: float = 0.05,
+    min_reference_mean: float = None,
+    min_target_mean: float = None,
+    max_fold_change: float = None
+) -> pd.DataFrame:
     """
     Load CSV file and filter for differentially expressed genes.
     
     Args:
         csv_path: Path to CSV file
         fdr_threshold: FDR threshold for differential expression (default: 0.05)
+        min_reference_mean: Minimum reference/control mean expression (filters inflated fold changes)
+        min_target_mean: Minimum target/perturbation mean expression
+        max_fold_change: Maximum fold change to consider (caps inflated values from low control expression)
         
     Returns:
         DataFrame filtered for DE genes
@@ -44,12 +54,45 @@ def load_csv_data(csv_path: Path, fdr_threshold: float = 0.05) -> pd.DataFrame:
     
     # Filter for DE genes (FDR < threshold)
     df_de = df[df['fdr'] < fdr_threshold].copy()
-    logging.info(f"Found {len(df_de)} DE gene entries (FDR < {fdr_threshold})")
+    initial_count = len(df_de)
+    logging.info(f"Found {initial_count} DE gene entries (FDR < {fdr_threshold})")
+    
+    # Apply expression thresholds to filter inflated fold changes
+    if min_reference_mean is not None:
+        if 'reference_mean' not in df_de.columns:
+            logging.warning("'reference_mean' column not found, skipping min_reference_mean filter")
+        else:
+            before = len(df_de)
+            df_de = df_de[df_de['reference_mean'] >= min_reference_mean].copy()
+            filtered = before - len(df_de)
+            logging.info(f"Filtered {filtered} genes with reference_mean < {min_reference_mean} ({len(df_de)} remaining)")
+    
+    if min_target_mean is not None:
+        if 'target_mean' not in df_de.columns:
+            logging.warning("'target_mean' column not found, skipping min_target_mean filter")
+        else:
+            before = len(df_de)
+            df_de = df_de[df_de['target_mean'] >= min_target_mean].copy()
+            filtered = before - len(df_de)
+            logging.info(f"Filtered {filtered} genes with target_mean < {min_target_mean} ({len(df_de)} remaining)")
+    
+    if max_fold_change is not None:
+        if 'fold_change' not in df_de.columns:
+            logging.warning("'fold_change' column not found, skipping max_fold_change filter")
+        else:
+            before = len(df_de)
+            # Use absolute fold change for filtering
+            abs_fold_change = df_de['fold_change'].abs()
+            df_de = df_de[abs_fold_change <= max_fold_change].copy()
+            filtered = before - len(df_de)
+            logging.info(f"Filtered {filtered} genes with |fold_change| > {max_fold_change} ({len(df_de)} remaining)")
+    
+    logging.info(f"Final filtered count: {len(df_de)} DE gene entries (from {initial_count})")
     
     return df_de
 
 
-def extract_de_genes_by_target(df_de: pd.DataFrame, top_n: int = None) -> Dict[str, Set[str]]:
+def extract_de_genes_by_target(df_de: pd.DataFrame, top_n: int = None) -> Tuple[Dict[str, Set[str]], Dict[Tuple[str, str], float]]:
     """
     Extract DE genes grouped by target gene, optionally filtering to top N per target.
     
@@ -58,9 +101,12 @@ def extract_de_genes_by_target(df_de: pd.DataFrame, top_n: int = None) -> Dict[s
         top_n: If provided, only keep top N genes per target based on rank (lower rank = higher priority)
         
     Returns:
-        Dictionary mapping target gene (uppercase) -> set of DE feature genes (uppercase)
+        Tuple of:
+        - Dictionary mapping target gene (uppercase) -> set of DE feature genes (uppercase)
+        - Dictionary mapping (target_upper, feature_upper) -> fold_change
     """
     de_genes_by_target: Dict[str, Set[str]] = defaultdict(set)
+    fold_changes: Dict[Tuple[str, str], float] = {}
     
     if top_n is not None and top_n > 0:
         # Sort by rank (lower rank = higher priority) and take top N per target
@@ -83,6 +129,9 @@ def extract_de_genes_by_target(df_de: pd.DataFrame, top_n: int = None) -> Dict[s
                 feature = str(row['feature']).strip().upper()
                 if target_upper and feature:
                     de_genes_by_target[target_upper].add(feature)
+                    # Store fold change if available
+                    if 'fold_change' in row and pd.notna(row['fold_change']):
+                        fold_changes[(target_upper, feature)] = float(row['fold_change'])
         
         logging.info(f"Found {len(de_genes_by_target)} target genes with DE genes (top {top_n} per target)")
     else:
@@ -93,10 +142,13 @@ def extract_de_genes_by_target(df_de: pd.DataFrame, top_n: int = None) -> Dict[s
             
             if target and feature:
                 de_genes_by_target[target].add(feature)
+                # Store fold change if available
+                if 'fold_change' in row and pd.notna(row['fold_change']):
+                    fold_changes[(target, feature)] = float(row['fold_change'])
         
         logging.info(f"Found {len(de_genes_by_target)} target genes with DE genes")
     
-    return dict(de_genes_by_target)
+    return dict(de_genes_by_target), fold_changes
 
 
 def load_graphs_data(json_path: Path) -> Dict[str, Dict[str, Dict[str, List[str]]]]:
@@ -119,15 +171,17 @@ def load_graphs_data(json_path: Path) -> Dict[str, Dict[str, Dict[str, List[str]
 
 def _init_worker(
     graphs_data: Dict[str, Dict[str, Dict[str, List[str]]]],
-    de_genes_by_target: Dict[str, Set[str]]
+    de_genes_by_target: Dict[str, Set[str]],
+    fold_changes: Dict[Tuple[str, str], float]
 ) -> None:
-    """Initialize worker process with graphs data and DE genes."""
-    global _worker_graphs_data, _worker_de_genes_by_target
+    """Initialize worker process with graphs data, DE genes, and fold changes."""
+    global _worker_graphs_data, _worker_de_genes_by_target, _worker_fold_changes
     _worker_graphs_data = graphs_data
     _worker_de_genes_by_target = de_genes_by_target
+    _worker_fold_changes = fold_changes
 
 
-def process_single_target(target_gene: str) -> Tuple[str, Dict[str, Dict[str, List[str]]]]:
+def process_single_target(target_gene: str) -> Tuple[str, Dict[str, Dict[str, List[Dict[str, Any]]]]]:
     """
     Process a single target gene to find deconvoluted DE genes.
     
@@ -140,8 +194,9 @@ def process_single_target(target_gene: str) -> Tuple[str, Dict[str, Dict[str, Li
         
     Returns:
         Tuple of (target_gene_upper, deconvoluted_genes_dict)
+        Each gene in the output is represented as {"gene": "GENE1", "fold_change": 2.5}
     """
-    global _worker_graphs_data, _worker_de_genes_by_target
+    global _worker_graphs_data, _worker_de_genes_by_target, _worker_fold_changes
     
     target_gene_upper = target_gene.upper()
     logging.info(f"Processing target: {target_gene_upper}")
@@ -171,11 +226,24 @@ def process_single_target(target_gene: str) -> Tuple[str, Dict[str, Dict[str, Li
     
     logging.info(f"  Found {len(deconvoluted_genes)} deconvoluted genes (not in hop 1)")
     
+    # Helper function to create gene entry with fold change
+    def make_gene_entry(gene: str) -> Dict[str, Any]:
+        entry = {"gene": gene}
+        fold_change = _worker_fold_changes.get((target_gene_upper, gene))
+        if fold_change is not None:
+            entry["fold_change"] = fold_change
+        return entry
+    
     # Organize by annotation type for output
-    result: Dict[str, Dict[str, List[str]]] = {}
+    result: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
     
     # Store deconvoluted genes (not in hop 1 for ANY annotation type)
-    result["deconvoluted"] = sorted(deconvoluted_genes)
+    # Sort by fold_change (descending), then by gene name (ascending)
+    result["deconvoluted"] = sorted(
+        [make_gene_entry(gene) for gene in deconvoluted_genes],
+        key=lambda x: (x.get("fold_change") if x.get("fold_change") is not None else float('-inf'), x["gene"]),
+        reverse=True
+    )
     
     # For each annotation type, show which DE genes are in/not in hop 1
     for ann_type in annotation_types:
@@ -185,9 +253,17 @@ def process_single_target(target_gene: str) -> Tuple[str, Dict[str, Dict[str, Li
                 for gene in graphs_for_target[ann_type].get("1", [])
             )
             # DE genes that are in hop 1 for this specific annotation type
-            in_hop1 = sorted(de_genes & hop1_genes)
+            in_hop1 = sorted(
+                [make_gene_entry(gene) for gene in (de_genes & hop1_genes)],
+                key=lambda x: (x.get("fold_change") if x.get("fold_change") is not None else float('-inf'), x["gene"]),
+                reverse=True
+            )
             # DE genes that are NOT in hop 1 for this annotation type
-            not_in_hop1 = sorted(de_genes - hop1_genes)
+            not_in_hop1 = sorted(
+                [make_gene_entry(gene) for gene in (de_genes - hop1_genes)],
+                key=lambda x: (x.get("fold_change") if x.get("fold_change") is not None else float('-inf'), x["gene"]),
+                reverse=True
+            )
             
             result[ann_type] = {
                 "in_hop1": in_hop1,
@@ -197,7 +273,11 @@ def process_single_target(target_gene: str) -> Tuple[str, Dict[str, Dict[str, Li
             # If no graph data, all DE genes are not in hop 1
             result[ann_type] = {
                 "in_hop1": [],
-                "not_in_hop1": sorted(de_genes)
+                "not_in_hop1": sorted(
+                    [make_gene_entry(gene) for gene in de_genes],
+                    key=lambda x: (x.get("fold_change") if x.get("fold_change") is not None else float('-inf'), x["gene"]),
+                    reverse=True
+                )
             }
     
     return target_gene_upper, result
@@ -209,7 +289,10 @@ def deconvolute_graphs(
     output_path: Path,
     fdr_threshold: float = 0.05,
     top_n: int = None,
-    num_workers: int = 1
+    num_workers: int = 1,
+    min_reference_mean: float = None,
+    min_target_mean: float = None,
+    max_fold_change: float = None
 ) -> None:
     """
     Deconvolute differentially expressed genes by removing direct pathway connections.
@@ -221,15 +304,24 @@ def deconvolute_graphs(
         fdr_threshold: FDR threshold for differential expression
         top_n: If provided, only use top N DE genes per target (based on rank)
         num_workers: Number of parallel workers to use
+        min_reference_mean: Minimum reference/control mean expression (filters inflated fold changes)
+        min_target_mean: Minimum target/perturbation mean expression
+        max_fold_change: Maximum fold change to consider (caps inflated values from low control expression)
     """
     # Load CSV and filter for DE genes
-    df_de = load_csv_data(csv_path, fdr_threshold)
+    df_de = load_csv_data(
+        csv_path, 
+        fdr_threshold,
+        min_reference_mean=min_reference_mean,
+        min_target_mean=min_target_mean,
+        max_fold_change=max_fold_change
+    )
     
     if top_n is not None and top_n > 0:
         logging.info(f"Filtering to top {top_n} DE genes per target based on rank")
     
-    # Extract DE genes by target (optionally filtered to top N)
-    de_genes_by_target = extract_de_genes_by_target(df_de, top_n=top_n)
+    # Extract DE genes by target (optionally filtered to top N) and fold changes
+    de_genes_by_target, fold_changes = extract_de_genes_by_target(df_de, top_n=top_n)
     
     # Load graphs data
     graphs_data = load_graphs_data(graphs_json_path)
@@ -240,11 +332,14 @@ def deconvolute_graphs(
     all_targets = sorted(csv_targets | graph_targets)
     
     logging.info(f"\nProcessing {len(all_targets)} target genes using {num_workers} workers...")
+    logging.info(f"Loaded fold change data for {len(fold_changes)} gene-target pairs")
     
-    results: Dict[str, Dict[str, Dict[str, List[str]]]] = {}
+    results: Dict[str, Dict[str, Dict[str, List[Dict[str, Any]]]]] = {}
     
     if num_workers == 1:
         # Sequential processing
+        # Initialize worker data for sequential mode
+        _init_worker(graphs_data, de_genes_by_target, fold_changes)
         for idx, target_gene in enumerate(all_targets, 1):
             target_gene_upper, result = process_single_target(target_gene)
             results[target_gene_upper] = result
@@ -257,7 +352,7 @@ def deconvolute_graphs(
         with multiprocessing.Pool(
             processes=num_workers,
             initializer=_init_worker,
-            initargs=(graphs_data, de_genes_by_target)
+            initargs=(graphs_data, de_genes_by_target, fold_changes)
         ) as pool:
             # Process all target genes in parallel
             try:
@@ -288,6 +383,7 @@ def deconvolute_graphs(
     logging.info(f"\nSummary:")
     logging.info(f"  Total deconvoluted genes: {total_deconvoluted}")
     logging.info(f"  Targets with deconvoluted genes: {targets_with_deconvoluted}")
+    logging.info(f"  Note: Gene entries now include fold_change values when available")
     
     # Save results
     logging.info(f"\nSaving results to {output_path}")
@@ -338,6 +434,24 @@ def main():
         default=1,
         help="Number of parallel workers to use (default: 1)",
     )
+    parser.add_argument(
+        "--min_reference_mean",
+        type=float,
+        default=None,
+        help="Minimum reference/control mean expression to filter inflated fold changes (e.g., 0.5 or 1.0 for shallow sequencing)",
+    )
+    parser.add_argument(
+        "--min_target_mean",
+        type=float,
+        default=None,
+        help="Minimum target/perturbation mean expression (e.g., 0.5 or 1.0)",
+    )
+    parser.add_argument(
+        "--max_fold_change",
+        type=float,
+        default=None,
+        help="Maximum fold change to consider (caps inflated values from low control expression, e.g., 10.0)",
+    )
     
     args = parser.parse_args()
     
@@ -354,7 +468,10 @@ def main():
         output_path=args.output,
         fdr_threshold=args.fdr_threshold,
         top_n=args.top_n,
-        num_workers=args.num_workers
+        num_workers=args.num_workers,
+        min_reference_mean=args.min_reference_mean,
+        min_target_mean=args.min_target_mean,
+        max_fold_change=args.max_fold_change
     )
 
 

@@ -181,9 +181,9 @@ def create_distribution_plots(df: pd.DataFrame, output_dir: Path):
     plt.close()
     logging.info(f"Saved best annotation distribution plot")
     
-    # 2. In hop1 vs Not in hop1 distribution (best annotation)
-    plt.figure(figsize=(12, 8))
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    # 2. In hop1 vs Not in hop1 distribution (all perturbations) - Line plot with area fill
+    # Use much larger figure size for readability
+    fig, axes = plt.subplots(2, 2, figsize=(50, 14))
     axes = axes.flatten()
     
     annotation_types = ["reactome", "bp", "cc", "mf"]
@@ -203,26 +203,114 @@ def create_distribution_plots(df: pd.DataFrame, output_dir: Path):
             ax.set_title(f'{ann_type.upper()}', fontsize=12, fontweight='bold')
             continue
         
-        # Create stacked bar chart
-        x_pos = np.arange(min(50, len(ann_df)))  # Limit to first 50 for readability
-        ann_df_sorted = ann_df.sort_values(f"{ann_type}_total_de", ascending=False).head(50)
+        # Sort by total DE and use all perturbations
+        ann_df_sorted = ann_df.sort_values(f"{ann_type}_total_de", ascending=False)
+        
+        # Create x positions for all perturbations
+        x_pos = np.arange(len(ann_df_sorted))
         
         in_hop1_vals = ann_df_sorted[in_hop1_col].values
         not_in_hop1_vals = ann_df_sorted[not_in_hop1_col].values
+        total_vals = in_hop1_vals + not_in_hop1_vals
         
-        ax.bar(x_pos, in_hop1_vals, label='In Hop 1', color='#3498db', alpha=0.8)
-        ax.bar(x_pos, not_in_hop1_vals, bottom=in_hop1_vals, label='Not in Hop 1', color='#e74c3c', alpha=0.8)
+        # Create area plot (stacked) with line overlay for better visibility
+        ax.fill_between(x_pos, 0, in_hop1_vals, label='In Hop 1', color='#3498db', alpha=0.6, linewidth=0)
+        ax.fill_between(x_pos, in_hop1_vals, total_vals, label='Not in Hop 1', color='#e74c3c', alpha=0.6, linewidth=0)
         
-        ax.set_xlabel('Perturbation (sorted by total DE)', fontsize=10)
-        ax.set_ylabel('Number of Genes', fontsize=10)
-        ax.set_title(f'{ann_type.upper()}\n(n={len(ann_df)} perturbations)', fontsize=12, fontweight='bold')
-        ax.legend(fontsize=9)
+        # Add line plots on top for better visibility
+        ax.plot(x_pos, in_hop1_vals, color='#2980b9', linewidth=0.5, alpha=0.8)
+        ax.plot(x_pos, total_vals, color='#c0392b', linewidth=0.5, alpha=0.8)
+        
+        ax.set_xlabel('Perturbation Index (sorted by total DE)', fontsize=12)
+        ax.set_ylabel('Number of Genes', fontsize=12)
+        ax.set_title(f'{ann_type.upper()}\n(n={len(ann_df)} perturbations)', fontsize=14, fontweight='bold')
+        ax.legend(fontsize=11, loc='upper right')
         ax.grid(axis='y', alpha=0.3)
+        
+        # Auto-scale y-axis to show full range
+        max_val = max(total_vals.max(), 1)  # Ensure at least 1 for visibility
+        ax.set_ylim(0, max_val * 1.05)
+        
+        # Set x-axis limits
+        ax.set_xlim(0, len(ann_df_sorted) - 1)
+        
+        # Add some x-axis ticks for reference (every 500 perturbations)
+        if len(ann_df_sorted) > 100:
+            tick_positions = np.arange(0, len(ann_df_sorted), max(500, len(ann_df_sorted) // 5))
+            ax.set_xticks(tick_positions)
+            ax.set_xticklabels([f'{int(x)}' for x in tick_positions], fontsize=9)
     
     plt.tight_layout()
     plt.savefig(output_dir / 'in_hop1_vs_not_distribution.png', dpi=300, bbox_inches='tight')
     plt.close()
-    logging.info(f"Saved in_hop1 vs not_in_hop1 distribution plot")
+    logging.info(f"Saved in_hop1 vs not_in_hop1 distribution plot (all {len(df)} perturbations)")
+    
+    # 2b. Create smoothed version for better readability
+    fig, axes = plt.subplots(2, 2, figsize=(30, 10))
+    axes = axes.flatten()
+    
+    for idx, ann_type in enumerate(annotation_types):
+        ax = axes[idx]
+        
+        in_hop1_col = f"{ann_type}_in_hop1"
+        not_in_hop1_col = f"{ann_type}_not_in_hop1"
+        
+        ann_df = df[df[f"{ann_type}_total_de"] > 0].copy()
+        
+        if len(ann_df) == 0:
+            ax.text(0.5, 0.5, f'No data for {ann_type}', 
+                   ha='center', va='center', transform=ax.transAxes, fontsize=12)
+            ax.set_title(f'{ann_type.upper()}', fontsize=12, fontweight='bold')
+            continue
+        
+        ann_df_sorted = ann_df.sort_values(f"{ann_type}_total_de", ascending=False)
+        x_pos = np.arange(len(ann_df_sorted))
+        
+        in_hop1_vals = ann_df_sorted[in_hop1_col].values
+        not_in_hop1_vals = ann_df_sorted[not_in_hop1_col].values
+        total_vals = in_hop1_vals + not_in_hop1_vals
+        
+        # Apply rolling average for smoothing (window size ~5% of data or min 50)
+        window_size = max(50, len(ann_df_sorted) // 20)
+        if window_size % 2 == 0:
+            window_size += 1  # Make odd for better centering
+        
+        # Convert to Series for rolling
+        in_hop1_series = pd.Series(in_hop1_vals)
+        total_series = pd.Series(total_vals)
+        
+        in_hop1_smooth = in_hop1_series.rolling(window=window_size, center=True).mean()
+        total_smooth = total_series.rolling(window=window_size, center=True).mean()
+        not_in_hop1_smooth = total_smooth - in_hop1_smooth
+        
+        # Create smoothed area plot
+        ax.fill_between(x_pos, 0, in_hop1_smooth, label='In Hop 1 (smoothed)', color='#3498db', alpha=0.7)
+        ax.fill_between(x_pos, in_hop1_smooth, total_smooth, label='Not in Hop 1 (smoothed)', color='#e74c3c', alpha=0.7)
+        
+        # Add smoothed lines
+        ax.plot(x_pos, in_hop1_smooth, color='#2980b9', linewidth=1.5, alpha=0.9)
+        ax.plot(x_pos, total_smooth, color='#c0392b', linewidth=1.5, alpha=0.9)
+        
+        ax.set_xlabel('Perturbation Index (sorted by total DE)', fontsize=11)
+        ax.set_ylabel('Number of Genes (smoothed)', fontsize=11)
+        ax.set_title(f'{ann_type.upper()} - Smoothed\n(n={len(ann_df)} perturbations, window={window_size})', fontsize=13, fontweight='bold')
+        ax.legend(fontsize=10, loc='upper right')
+        ax.grid(axis='y', alpha=0.3)
+        
+        max_val = max(total_smooth.max(), 1)
+        ax.set_ylim(0, max_val * 1.05)
+        ax.set_xlim(0, len(ann_df_sorted) - 1)
+        
+        # Add x-axis ticks
+        if len(ann_df_sorted) > 100:
+            tick_positions = np.arange(0, len(ann_df_sorted), max(500, len(ann_df_sorted) // 5))
+            ax.set_xticks(tick_positions)
+            ax.set_xticklabels([f'{int(x)}' for x in tick_positions], fontsize=9)
+    
+    plt.tight_layout()
+    plt.savefig(output_dir / 'in_hop1_vs_not_distribution_smoothed.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    logging.info(f"Saved smoothed in_hop1 vs not_in_hop1 distribution plot")
     
     # 3. Summary statistics box plots
     plt.figure(figsize=(14, 8))
