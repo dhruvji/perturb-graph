@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deconvoluted Genes Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['"Space Grotesk"', 'Inter', 'ui-sans-serif', 'system-ui'],
+          },
+          colors: {
+            surface: '#0b1021',
+            panel: '#0f172a',
+            accent: '#7dd3fc',
+          },
+        },
+      },
+    };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg: #0b1021;
+      --card: rgba(16, 24, 40, 0.7);
+      --border: rgba(255, 255, 255, 0.08);
+      --muted: rgba(255, 255, 255, 0.7);
+      --glow: 0 15px 60px rgba(125, 211, 252, 0.22);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(40% 40% at 20% 20%, rgba(125, 211, 252, 0.16), transparent),
+                  radial-gradient(35% 35% at 80% 0%, rgba(94, 234, 212, 0.12), transparent),
+                  radial-gradient(45% 45% at 50% 90%, rgba(59, 130, 246, 0.08), transparent);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-shadow: var(--glow);
+      backdrop-filter: blur(12px);
+    }
+    .pill {
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.04);
+    }
+    select:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[color:var(--bg)] text-slate-50 antialiased">
+  <div class="relative z-10 max-w-6xl mx-auto px-6 py-10 space-y-8">
+    <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div class="space-y-1.5">
+        <p class="text-sm uppercase tracking-[0.35em] text-slate-400">GBM perturbation</p>
+        <h1 class="text-3xl font-semibold">Deconvoluted Genes Explorer</h1>
+        <p class="text-slate-400 max-w-2xl">Pick a dataset, choose a perturbed gene, and browse all deconvoluted targets ranked by fold change.</p>
+      </div>
+      <div class="pill px-4 py-2 rounded-full text-sm text-slate-200 flex items-center gap-2">
+        <span class="inline-block h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(16,185,129,0.15)]"></span>
+        Data source: /data/dhruvgautam/gbm_perturb/deconvoluted
+      </div>
+    </header>
+
+    <section class="grid gap-4 md:grid-cols-3">
+      <label class="card rounded-xl px-4 py-4 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-slate-300">Dataset</span>
+          <span id="dataset-count" class="text-xs text-slate-400">11 options</span>
+        </div>
+        <select id="dataset-select" class="w-full rounded-lg bg-slate-900/70 border border-slate-700 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-300">
+          <option value="">Select a dataset</option>
+        </select>
+      </label>
+
+      <label class="card rounded-xl px-4 py-4 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-slate-300">Perturbed gene</span>
+          <span id="gene-count" class="text-xs text-slate-400">—</span>
+        </div>
+        <select id="gene-select" disabled class="w-full rounded-lg bg-slate-900/50 border border-slate-800 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-300">
+          <option value="">Select after loading dataset</option>
+        </select>
+      </label>
+
+      <div class="card rounded-xl px-4 py-4 flex flex-col justify-center gap-2">
+        <div class="flex items-center gap-3">
+          <div class="h-10 w-10 rounded-full bg-sky-300/15 border border-slate-700 flex items-center justify-center text-sky-200 font-semibold">FC</div>
+          <div>
+            <p class="text-sm text-slate-300">Ranking</p>
+            <p class="text-slate-100">Up vs Down by fold change</p>
+          </div>
+        </div>
+        <p id="status" class="text-xs text-slate-400">Waiting for dataset selection.</p>
+      </div>
+    </section>
+
+    <section id="results" class="space-y-4">
+      <div class="card rounded-xl px-6 py-6 text-slate-300">
+        Load a dataset and perturbed gene to see ranked deconvoluted targets.
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const datasetFiles = [
+      "Astro_deconvoluted.json",
+      "CED_RT_deconvoluted.json",
+      "CED_noRT_deconvoluted.json",
+      "Macrophages_deconvoluted.json",
+      "Microglia_deconvoluted.json",
+      "OPC_deconvoluted.json",
+      "Oligo_deconvoluted.json",
+      "invitro_RT_deconvoluted.json",
+      "invitro_noRT_deconvoluted.json",
+      "preinf_RT_deconvoluted.json",
+      "preinf_noRT_deconvoluted.json",
+    ];
+
+    const datasetSelect = document.getElementById("dataset-select");
+    const geneSelect = document.getElementById("gene-select");
+    const results = document.getElementById("results");
+    const statusEl = document.getElementById("status");
+    const geneCountEl = document.getElementById("gene-count");
+    const datasetCountEl = document.getElementById("dataset-count");
+
+    datasetCountEl.textContent = `${datasetFiles.length} options`;
+    datasetFiles
+      .sort((a, b) => a.localeCompare(b))
+      .forEach((file) => {
+        const clean = file.replace("_deconvoluted.json", "").replace(/_/g, " ");
+        const option = document.createElement("option");
+        option.value = file;
+        option.textContent = clean;
+        datasetSelect.appendChild(option);
+      });
+
+    let currentDataset = null;
+
+    datasetSelect.addEventListener("change", async (e) => {
+      const file = e.target.value;
+      geneSelect.innerHTML = '<option value="">Select after loading dataset</option>';
+      geneSelect.disabled = true;
+      results.innerHTML = `
+        <div class="card rounded-xl px-6 py-6 text-slate-300">
+          Loading <span class="text-slate-100 font-semibold">${file || "dataset"}</span>...
+        </div>
+      `;
+      statusEl.textContent = "Fetching dataset…";
+
+      if (!file) {
+        results.innerHTML = '<div class="card rounded-xl px-6 py-6 text-slate-300">Load a dataset and perturbed gene to see ranked deconvoluted targets.</div>';
+        statusEl.textContent = "Waiting for dataset selection.";
+        geneCountEl.textContent = "—";
+        return;
+      }
+
+      try {
+        const res = await fetch(`./data/${file}`);
+        if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+        const data = await res.json();
+        currentDataset = data;
+
+        const genes = Object.entries(data)
+          .filter(([, val]) => Array.isArray(val.deconvoluted) && val.deconvoluted.length > 0)
+          .map(([gene, val]) => ({ gene, count: val.deconvoluted.length }))
+          .sort((a, b) => a.gene.localeCompare(b.gene));
+
+        geneSelect.innerHTML = '<option value="">Select a perturbed gene</option>';
+        genes.forEach(({ gene, count }) => {
+          const option = document.createElement("option");
+          option.value = gene;
+          option.textContent = `${gene} (${count})`;
+          geneSelect.appendChild(option);
+        });
+        geneSelect.disabled = genes.length === 0;
+        geneCountEl.textContent = genes.length ? `${genes.length} genes` : "0 genes";
+        statusEl.textContent = genes.length
+          ? "Pick a perturbed gene to view ranked deconvoluted targets."
+          : "No deconvoluted entries found for this dataset.";
+        results.innerHTML = genes.length
+          ? '<div class="card rounded-xl px-6 py-6 text-slate-300">Select a perturbed gene to display its ranked targets.</div>'
+          : '<div class="card rounded-xl px-6 py-6 text-slate-300">No deconvoluted results found in this dataset.</div>';
+      } catch (err) {
+        statusEl.textContent = "Failed to load dataset.";
+        geneCountEl.textContent = "—";
+        results.innerHTML = `
+          <div class="card rounded-xl px-6 py-6 text-rose-100">
+            Could not load ${file}: ${err.message}
+          </div>
+        `;
+      }
+    });
+
+    geneSelect.addEventListener("change", (e) => {
+      const gene = e.target.value;
+      if (!gene || !currentDataset) return;
+
+      const entry = currentDataset[gene];
+      const list = (entry && Array.isArray(entry.deconvoluted)) ? entry.deconvoluted : [];
+      if (!list.length) {
+        results.innerHTML = '<div class="card rounded-xl px-6 py-6 text-slate-300">No deconvoluted targets for this gene.</div>';
+        statusEl.textContent = "No targets to rank.";
+        return;
+      }
+
+      const up = list.filter((x) => x.fold_change > 0).sort((a, b) => b.fold_change - a.fold_change);
+      const down = list.filter((x) => x.fold_change < 0).sort((a, b) => a.fold_change - b.fold_change);
+
+      const renderList = (items) => items.map((item, idx) => `
+        <div class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
+          <div class="flex items-center gap-2 text-slate-100">
+            <span class="text-xs text-slate-400 w-6 text-right">${idx + 1}.</span>
+            <span class="font-medium">${item.gene}</span>
+          </div>
+          <span class="text-sm text-slate-200 tabular-nums">${item.fold_change.toFixed(3)}</span>
+        </div>
+      `).join("") || '<div class="text-sm text-slate-400">No entries.</div>';
+
+      results.innerHTML = `
+        <div class="grid gap-6 md:grid-cols-2">
+          <div class="card rounded-xl p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs uppercase tracking-[0.2em] text-emerald-300">Upregulated</p>
+                <p class="text-lg font-semibold text-slate-50">${up.length} genes</p>
+              </div>
+              <span class="pill px-3 py-1 rounded-full text-xs text-emerald-200">Fold change ↓</span>
+            </div>
+            <div class="space-y-2">${renderList(up)}</div>
+          </div>
+          <div class="card rounded-xl p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs uppercase tracking-[0.2em] text-sky-300">Downregulated</p>
+                <p class="text-lg font-semibold text-slate-50">${down.length} genes</p>
+              </div>
+              <span class="pill px-3 py-1 rounded-full text-xs text-sky-200">Fold change ↑</span>
+            </div>
+            <div class="space-y-2">${renderList(down)}</div>
+          </div>
+        </div>
+      `;
+
+      statusEl.textContent = `Showing ranked targets for ${gene}.`;
+    });
+  </script>
+</body>
+</html>
