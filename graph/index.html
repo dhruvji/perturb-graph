@@ -64,7 +64,7 @@
       <div class="space-y-1.5">
         <p class="text-sm uppercase tracking-[0.35em] text-slate-400">GBM perturbation</p>
         <h1 class="text-3xl font-semibold">Deconvoluted Genes Explorer</h1>
-        <p class="text-slate-400 max-w-2xl">Pick a dataset, choose a perturbed gene, and browse all deconvoluted targets ranked by fold change.</p>
+        <p class="text-slate-400 max-w-2xl">Pick a dataset, then click a node in the ontology mini-graph to set the perturbation. Deconvoluted edges are dotted; known ontology edges that match fold changes are solid.</p>
       </div>
       <div class="pill px-4 py-2 rounded-full text-sm text-slate-200 flex items-center gap-2">
         <span class="inline-block h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(16,185,129,0.15)]"></span>
@@ -72,42 +72,51 @@
       </div>
     </header>
 
-    <section class="grid gap-4 md:grid-cols-3">
-      <label class="card rounded-xl px-4 py-4 flex flex-col gap-2">
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-slate-300">Dataset</span>
-          <span id="dataset-count" class="text-xs text-slate-400">11 options</span>
-        </div>
-        <select id="dataset-select" class="w-full rounded-lg bg-slate-900/70 border border-slate-700 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-300">
-          <option value="">Select a dataset</option>
-        </select>
-      </label>
-
-      <label class="card rounded-xl px-4 py-4 flex flex-col gap-2">
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-slate-300">Perturbed gene</span>
-          <span id="gene-count" class="text-xs text-slate-400">—</span>
-        </div>
-        <select id="gene-select" disabled class="w-full rounded-lg bg-slate-900/50 border border-slate-800 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-300">
-          <option value="">Select after loading dataset</option>
-        </select>
-      </label>
-
-      <div class="card rounded-xl px-4 py-4 flex flex-col justify-center gap-2">
-        <div class="flex items-center gap-3">
-          <div class="h-10 w-10 rounded-full bg-sky-300/15 border border-slate-700 flex items-center justify-center text-sky-200 font-semibold">FC</div>
-          <div>
-            <p class="text-sm text-slate-300">Ranking</p>
-            <p class="text-slate-100">Up vs Down by fold change</p>
+    <section class="grid gap-4 md:grid-cols-[1fr_2fr] items-start">
+      <div class="space-y-4">
+        <label class="card rounded-xl px-4 py-4 flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-slate-300">Dataset</span>
+            <span id="dataset-count" class="text-xs text-slate-400">11 options</span>
           </div>
+          <select id="dataset-select" class="w-full rounded-lg bg-slate-900/70 border border-slate-700 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-300">
+            <option value="">Select a dataset</option>
+          </select>
+        </label>
+
+        <div class="card rounded-xl px-4 py-4 flex flex-col justify-center gap-2">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-full bg-sky-300/15 border border-slate-700 flex items-center justify-center text-sky-200 font-semibold">FC</div>
+            <div>
+              <p class="text-sm text-slate-300">Ranking</p>
+              <p class="text-slate-100">Up vs Down by fold change</p>
+            </div>
+          </div>
+          <p id="status" class="text-xs text-slate-400">Waiting for dataset selection.</p>
+          <p id="gene-count" class="text-xs text-slate-500">—</p>
         </div>
-        <p id="status" class="text-xs text-slate-400">Waiting for dataset selection.</p>
+      </div>
+
+      <div class="card rounded-xl px-5 py-5 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Ontology mini-graph</p>
+            <p class="text-lg text-slate-50">Hover to inspect, click to pick perturbation</p>
+          </div>
+          <span id="current-perturbation" class="pill px-3 py-1 rounded-full text-xs text-slate-200">None selected</span>
+        </div>
+        <div id="graph-wrapper" class="relative h-[320px] rounded-lg border border-slate-800 bg-slate-900/40 overflow-hidden flex items-center justify-center">
+          <div id="graph-empty" class="text-slate-500 text-sm">Select a dataset to load the graph.</div>
+          <svg id="graph" viewBox="0 0 640 320" class="w-full h-full hidden"></svg>
+          <div id="graph-tooltip" class="hidden absolute z-20 pointer-events-none bg-slate-900/90 text-slate-50 text-xs rounded-lg border border-slate-800 px-3 py-2 shadow-xl max-w-xs"></div>
+        </div>
+        <p class="text-xs text-slate-400">Edges are dotted when only deconvoluted; solid when also present in precomputed ontology hops with fold-change support.</p>
       </div>
     </section>
 
     <section id="results" class="space-y-4">
       <div class="card rounded-xl px-6 py-6 text-slate-300">
-        Load a dataset and perturbed gene to see ranked deconvoluted targets.
+        Load a dataset, then click a node to see ranked deconvoluted targets.
       </div>
     </section>
   </div>
@@ -128,11 +137,15 @@
     ];
 
     const datasetSelect = document.getElementById("dataset-select");
-    const geneSelect = document.getElementById("gene-select");
     const results = document.getElementById("results");
     const statusEl = document.getElementById("status");
     const geneCountEl = document.getElementById("gene-count");
     const datasetCountEl = document.getElementById("dataset-count");
+    const graph = document.getElementById("graph");
+    const graphWrapper = document.getElementById("graph-wrapper");
+    const graphTooltip = document.getElementById("graph-tooltip");
+    const graphEmpty = document.getElementById("graph-empty");
+    const currentPerturbationEl = document.getElementById("current-perturbation");
 
     datasetCountEl.textContent = `${datasetFiles.length} options`;
     datasetFiles
@@ -146,71 +159,27 @@
       });
 
     let currentDataset = null;
+    let graphData = null;
+    let currentPerturbation = null;
 
-    datasetSelect.addEventListener("change", async (e) => {
-      const file = e.target.value;
-      geneSelect.innerHTML = '<option value="">Select after loading dataset</option>';
-      geneSelect.disabled = true;
-      results.innerHTML = `
-        <div class="card rounded-xl px-6 py-6 text-slate-300">
-          Loading <span class="text-slate-100 font-semibold">${file || "dataset"}</span>...
-        </div>
-      `;
-      statusEl.textContent = "Fetching dataset…";
+    function setStatus(msg) {
+      statusEl.textContent = msg;
+    }
 
-      if (!file) {
-        results.innerHTML = '<div class="card rounded-xl px-6 py-6 text-slate-300">Load a dataset and perturbed gene to see ranked deconvoluted targets.</div>';
-        statusEl.textContent = "Waiting for dataset selection.";
-        geneCountEl.textContent = "—";
-        return;
-      }
+    function resetGraph() {
+      graph.innerHTML = "";
+      graph.classList.add("hidden");
+      graphEmpty.classList.remove("hidden");
+      currentPerturbationEl.textContent = "None selected";
+    }
 
-      try {
-        const res = await fetch(`./data/${file}`);
-        if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
-        const data = await res.json();
-        currentDataset = data;
-
-        const genes = Object.entries(data)
-          .filter(([, val]) => Array.isArray(val.deconvoluted) && val.deconvoluted.length > 0)
-          .map(([gene, val]) => ({ gene, count: val.deconvoluted.length }))
-          .sort((a, b) => a.gene.localeCompare(b.gene));
-
-        geneSelect.innerHTML = '<option value="">Select a perturbed gene</option>';
-        genes.forEach(({ gene, count }) => {
-          const option = document.createElement("option");
-          option.value = gene;
-          option.textContent = `${gene} (${count})`;
-          geneSelect.appendChild(option);
-        });
-        geneSelect.disabled = genes.length === 0;
-        geneCountEl.textContent = genes.length ? `${genes.length} genes` : "0 genes";
-        statusEl.textContent = genes.length
-          ? "Pick a perturbed gene to view ranked deconvoluted targets."
-          : "No deconvoluted entries found for this dataset.";
-        results.innerHTML = genes.length
-          ? '<div class="card rounded-xl px-6 py-6 text-slate-300">Select a perturbed gene to display its ranked targets.</div>'
-          : '<div class="card rounded-xl px-6 py-6 text-slate-300">No deconvoluted results found in this dataset.</div>';
-      } catch (err) {
-        statusEl.textContent = "Failed to load dataset.";
-        geneCountEl.textContent = "—";
-        results.innerHTML = `
-          <div class="card rounded-xl px-6 py-6 text-rose-100">
-            Could not load ${file}: ${err.message}
-          </div>
-        `;
-      }
-    });
-
-    geneSelect.addEventListener("change", (e) => {
-      const gene = e.target.value;
+    function renderRanking(gene) {
       if (!gene || !currentDataset) return;
-
       const entry = currentDataset[gene];
       const list = (entry && Array.isArray(entry.deconvoluted)) ? entry.deconvoluted : [];
       if (!list.length) {
         results.innerHTML = '<div class="card rounded-xl px-6 py-6 text-slate-300">No deconvoluted targets for this gene.</div>';
-        statusEl.textContent = "No targets to rank.";
+        setStatus("No targets to rank.");
         return;
       }
 
@@ -252,7 +221,164 @@
         </div>
       `;
 
-      statusEl.textContent = `Showing ranked targets for ${gene}.`;
+      setStatus(`Showing ranked targets for ${gene}.`);
+    }
+
+    function getOutgoingEdges(gene) {
+      if (!graphData || !graphData.graphs) return [];
+      const g = graphData.graphs[gene];
+      return g ? g.edges : [];
+    }
+
+    function renderGraph(perturbation) {
+      if (!graphData || !graphData.graphs[perturbation]) {
+        resetGraph();
+        return;
+      }
+      currentPerturbation = perturbation;
+      currentPerturbationEl.textContent = perturbation;
+      graph.innerHTML = "";
+      graph.classList.remove("hidden");
+      graphEmpty.classList.add("hidden");
+
+      const data = graphData.graphs[perturbation];
+      const width = 640;
+      const height = 320;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const nodes = data.nodes.map((id) => ({ id }));
+      const centerNode = nodes.find((n) => n.id === perturbation);
+      const others = nodes.filter((n) => n.id !== perturbation);
+      const radius = Math.min(width, height) * 0.35;
+      others.forEach((n, idx) => {
+        const angle = (2 * Math.PI * idx) / others.length;
+        n.x = centerX + radius * Math.cos(angle);
+        n.y = centerY + radius * Math.sin(angle);
+      });
+      if (centerNode) {
+        centerNode.x = centerX;
+        centerNode.y = centerY;
+      }
+
+      const edges = data.edges.map((e) => ({
+        ...e,
+        source: nodes.find((n) => n.id === e.source),
+        target: nodes.find((n) => n.id === e.target),
+      })).filter((e) => e.source && e.target);
+
+      const makeLine = (edge) => {
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", edge.source.x);
+        line.setAttribute("y1", edge.source.y);
+        line.setAttribute("x2", edge.target.x);
+        line.setAttribute("y2", edge.target.y);
+        line.setAttribute("stroke", "rgba(148, 163, 184, 0.6)");
+        line.setAttribute("stroke-width", edge.known ? "1.6" : "1.2");
+        if (!edge.known) line.setAttribute("stroke-dasharray", "4 3");
+        return line;
+      };
+
+      edges.forEach((edge) => graph.appendChild(makeLine(edge)));
+
+      const addNode = (node) => {
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("transform", `translate(${node.x}, ${node.y})`);
+
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("r", node.id === perturbation ? "16" : "8.5");
+        circle.setAttribute("fill", node.id === perturbation ? "rgba(148, 163, 184, 0.3)" : "rgba(148, 163, 184, 0.18)");
+        circle.setAttribute("stroke", node.id === perturbation ? "rgba(226, 232, 240, 0.9)" : "rgba(148, 163, 184, 0.6)");
+        circle.setAttribute("stroke-width", node.id === perturbation ? "1.8" : "1");
+        g.appendChild(circle);
+
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("y", node.id === perturbation ? "4" : "3");
+        text.setAttribute("fill", "rgba(226, 232, 240, 0.9)");
+        text.setAttribute("font-size", node.id === perturbation ? "11" : "9");
+        text.setAttribute("font-family", "Space Grotesk, sans-serif");
+        text.textContent = node.id;
+        g.appendChild(text);
+
+        const outgoing = getOutgoingEdges(node.id);
+        g.addEventListener("mouseenter", (evt) => {
+          const preview = outgoing.slice(0, 6).map((edge) => `${edge.target} (${edge.fold_change.toFixed(2)})`).join(", ");
+          graphTooltip.innerHTML = `
+            <div class="font-semibold mb-1 text-slate-50">${node.id}</div>
+            <div class="text-slate-200">Outgoing (${outgoing.length || 0}): ${preview || "—"}</div>
+          `;
+          graphTooltip.style.left = `${evt.offsetX + 12}px`;
+          graphTooltip.style.top = `${evt.offsetY + 12}px`;
+          graphTooltip.classList.remove("hidden");
+        });
+        g.addEventListener("mousemove", (evt) => {
+          graphTooltip.style.left = `${evt.offsetX + 12}px`;
+          graphTooltip.style.top = `${evt.offsetY + 12}px`;
+        });
+        g.addEventListener("mouseleave", () => graphTooltip.classList.add("hidden"));
+        g.addEventListener("click", () => {
+          if (graphData && graphData.graphs[node.id]) {
+            renderGraph(node.id);
+            renderRanking(node.id);
+          }
+        });
+
+        graph.appendChild(g);
+      };
+
+      nodes.forEach(addNode);
+    }
+
+    datasetSelect.addEventListener("change", async (e) => {
+      const file = e.target.value;
+      results.innerHTML = `
+        <div class="card rounded-xl px-6 py-6 text-slate-300">
+          Loading <span class="text-slate-100 font-semibold">${file || "dataset"}</span>...
+        </div>
+      `;
+      setStatus("Fetching dataset…");
+      resetGraph();
+
+      if (!file) {
+        results.innerHTML = '<div class="card rounded-xl px-6 py-6 text-slate-300">Load a dataset, then click a node to see ranked deconvoluted targets.</div>';
+        setStatus("Waiting for dataset selection.");
+        geneCountEl.textContent = "—";
+        return;
+      }
+
+      try {
+        const res = await fetch(`./data/${file}`);
+        if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+        currentDataset = await res.json();
+
+        const graphName = file.replace("_deconvoluted.json", "_graph.json");
+        const graphRes = await fetch(`./data/graphs/${graphName}`);
+        if (!graphRes.ok) throw new Error(`Graph fetch failed: ${graphRes.status}`);
+        graphData = await graphRes.json();
+
+        const genes = (graphData.perturbations || []).sort((a, b) => a.localeCompare(b));
+        geneCountEl.textContent = genes.length ? `${genes.length} perturbations` : "0 perturbations";
+
+        if (!genes.length) {
+          results.innerHTML = '<div class="card rounded-xl px-6 py-6 text-slate-300">No deconvoluted results found in this dataset.</div>';
+          setStatus("No perturbations with deconvoluted targets.");
+          resetGraph();
+          return;
+        }
+
+        results.innerHTML = '<div class="card rounded-xl px-6 py-6 text-slate-300">Click a node to display its ranked targets.</div>';
+        setStatus("Hover nodes to inspect; click to select perturbation.");
+        renderGraph(genes[0]);
+        renderRanking(genes[0]);
+      } catch (err) {
+        setStatus("Failed to load dataset or graph.");
+        geneCountEl.textContent = "—";
+        results.innerHTML = `
+          <div class="card rounded-xl px-6 py-6 text-rose-100">
+            Could not load ${file}: ${err.message}
+          </div>
+        `;
+      }
     });
   </script>
 </body>
