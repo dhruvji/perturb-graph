@@ -84,6 +84,16 @@
           </select>
         </label>
 
+        <label class="card rounded-xl px-4 py-4 flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-slate-300">Perturbation</span>
+            <span id="gene-count" class="text-xs text-slate-400">—</span>
+          </div>
+          <select id="perturb-select" disabled class="w-full rounded-lg bg-slate-900/70 border border-slate-700 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-300">
+            <option value="">Select after loading dataset</option>
+          </select>
+        </label>
+
         <div class="card rounded-xl px-4 py-4 flex flex-col justify-center gap-2">
           <div class="flex items-center gap-3">
             <div class="h-10 w-10 rounded-full bg-sky-300/15 border border-slate-700 flex items-center justify-center text-sky-200 font-semibold">FC</div>
@@ -93,7 +103,6 @@
             </div>
           </div>
           <p id="status" class="text-xs text-slate-400">Waiting for dataset selection.</p>
-          <p id="gene-count" class="text-xs text-slate-500">—</p>
         </div>
       </div>
 
@@ -101,7 +110,7 @@
         <div class="flex items-center justify-between">
           <div>
             <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Ontology mini-graph</p>
-            <p class="text-lg text-slate-50">Hover to inspect, click to pick perturbation</p>
+            <p class="text-lg text-slate-50">All outgoing edges (|FC| ≥ 1) for selected perturbation</p>
           </div>
           <span id="current-perturbation" class="pill px-3 py-1 rounded-full text-xs text-slate-200">None selected</span>
         </div>
@@ -114,9 +123,14 @@
       </div>
     </section>
 
-    <section id="results" class="space-y-4">
-      <div class="card rounded-xl px-6 py-6 text-slate-300">
-        Load a dataset, then click a node to see ranked deconvoluted targets.
+    <section class="space-y-4">
+      <div id="results" class="space-y-4">
+        <div class="card rounded-xl px-6 py-6 text-slate-300">
+          Load a dataset, then click a node to see ranked deconvoluted targets.
+        </div>
+      </div>
+      <div id="program-results" class="card rounded-xl px-6 py-6 text-slate-300">
+        Program enrichment (absolute fold-change share) will appear here after selecting a perturbation.
       </div>
     </section>
   </div>
@@ -141,11 +155,13 @@
     const statusEl = document.getElementById("status");
     const geneCountEl = document.getElementById("gene-count");
     const datasetCountEl = document.getElementById("dataset-count");
+    const perturbSelect = document.getElementById("perturb-select");
     const graph = document.getElementById("graph");
     const graphWrapper = document.getElementById("graph-wrapper");
     const graphTooltip = document.getElementById("graph-tooltip");
     const graphEmpty = document.getElementById("graph-empty");
     const currentPerturbationEl = document.getElementById("current-perturbation");
+    const programResults = document.getElementById("program-results");
 
     datasetCountEl.textContent = `${datasetFiles.length} options`;
     datasetFiles
@@ -161,6 +177,8 @@
     let currentDataset = null;
     let graphData = null;
     let currentPerturbation = null;
+    let availablePerturbations = [];
+    let programData = null;
 
     function setStatus(msg) {
       statusEl.textContent = msg;
@@ -170,6 +188,14 @@
       graph.innerHTML = "";
       graph.classList.add("hidden");
       graphEmpty.classList.remove("hidden");
+      currentPerturbationEl.textContent = "None selected";
+    }
+
+    function resetPerturbations() {
+      perturbSelect.innerHTML = '<option value=\"\">Select after loading dataset</option>';
+      perturbSelect.disabled = true;
+      geneCountEl.textContent = "—";
+      currentPerturbation = null;
       currentPerturbationEl.textContent = "None selected";
     }
 
@@ -224,87 +250,195 @@
       setStatus(`Showing ranked targets for ${gene}.`);
     }
 
-    function getOutgoingEdges(gene) {
-      if (!graphData || !graphData.graphs) return [];
-      const g = graphData.graphs[gene];
-      return g ? g.edges : [];
+    function renderPrograms(gene) {
+      if (!gene || !programData || !programData[gene]) {
+        programResults.innerHTML = '<div class="text-slate-300">No program enrichment available for this perturbation.</div>';
+        return;
+      }
+
+      const entry = programData[gene];
+      const programs = Object.entries(entry.programs || {});
+      if (!programs.length) {
+        programResults.innerHTML = '<div class="text-slate-300">No program enrichment available for this perturbation.</div>';
+        return;
+      }
+
+      const sorted = programs
+        .map(([name, obj]) => ({ name, ...obj }))
+        .sort((a, b) => b.mean_abs_fold_change - a.mean_abs_fold_change)
+        .slice(0, 6);
+
+      const cards = sorted.map((p) => `
+        <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-2">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-400">${p.category}</p>
+              <p class="text-lg font-semibold text-slate-50">${p.name}</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-3 text-sm text-slate-200">
+            <div class="rounded-lg bg-slate-900/60 border border-slate-800 px-3 py-2">
+              <p class="text-xs text-slate-400">Coverage</p>
+              <p class="font-semibold">${(p.coverage * 100).toFixed(1)}%</p>
+            </div>
+            <div class="rounded-lg bg-slate-900/60 border border-slate-800 px-3 py-2">
+              <p class="text-xs text-slate-400">Hits</p>
+              <p class="font-semibold">${p.num_hits}/${p.num_program_genes}</p>
+            </div>
+            <div class="rounded-lg bg-slate-900/60 border border-slate-800 px-3 py-2">
+              <p class="text-xs text-slate-400">Mean |FC|</p>
+              <p class="font-semibold">${p.mean_abs_fold_change.toFixed(2)}</p>
+            </div>
+          </div>
+          <div class="text-xs text-slate-300">
+            <span class="text-slate-400 mr-1">Genes:</span>
+            ${p.genes_hit.map((g) => `<span class="pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] text-slate-100 border border-slate-800">${g.gene}<span class="text-slate-400">${g.fold_change.toFixed(2)}</span></span>`).join(" ") || "—"}
+          </div>
+        </div>
+      `).join("");
+
+      programResults.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Program enrichment</p>
+            <p class="text-lg text-slate-50">Top programs by mean |fold change|</p>
+          </div>
+          <div class="text-xs text-slate-400">Total |FC| sum: ${entry.total_abs_fold_change.toFixed(2)}</div>
+        </div>
+        <div class="grid gap-3 md:grid-cols-2">
+          ${cards}
+        </div>
+      `;
+    }
+
+    function computeLayout(edges, centerId, width, height) {
+      const centerX = width / 2;
+      const centerY = height / 2;
+      // Expand radius with node count to reduce overlap when many edges are shown
+      const n = Math.max(edges.length, 1);
+      const radiusFactor = Math.min(0.25 + Math.min(n, 25) * 0.015, 0.6);
+      const radius = Math.min(width, height) * radiusFactor;
+      const layout = new Map();
+      layout.set(centerId, { x: centerX, y: centerY });
+      const targets = edges.map((e) => e.target);
+      targets.forEach((id, idx) => {
+        const angle = (2 * Math.PI * idx) / Math.max(targets.length, 1);
+        layout.set(id, {
+          x: centerX + radius * Math.cos(angle),
+          y: centerY + radius * Math.sin(angle),
+        });
+      });
+      return layout;
     }
 
     function renderGraph(perturbation) {
-      if (!graphData || !graphData.graphs[perturbation]) {
+      if (!graphData || !graphData.graphs || !graphData.graphs[perturbation]) {
         resetGraph();
         return;
       }
+      graphTooltip.classList.add("hidden");
       currentPerturbation = perturbation;
       currentPerturbationEl.textContent = perturbation;
       graph.innerHTML = "";
       graph.classList.remove("hidden");
       graphEmpty.classList.add("hidden");
 
-      const data = graphData.graphs[perturbation];
+      // Define arrow markers for directionality
+      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      const markerDown = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+      markerDown.id = "arrow-down";
+      markerDown.setAttribute("viewBox", "0 0 10 10");
+      markerDown.setAttribute("refX", "10");
+      markerDown.setAttribute("refY", "5");
+      markerDown.setAttribute("markerWidth", "7");
+      markerDown.setAttribute("markerHeight", "7");
+      markerDown.setAttribute("orient", "auto");
+      const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      arrowPath.setAttribute("d", "M0 0 L10 5 L0 10 z");
+      arrowPath.setAttribute("fill", "rgba(226, 232, 240, 0.9)");
+      markerDown.appendChild(arrowPath);
+      defs.appendChild(markerDown);
+
+      const markerUp = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+      markerUp.id = "arrow-up";
+      markerUp.setAttribute("viewBox", "0 0 12 10");
+      markerUp.setAttribute("refX", "12");
+      markerUp.setAttribute("refY", "5");
+      markerUp.setAttribute("markerWidth", "8");
+      markerUp.setAttribute("markerHeight", "7");
+      markerUp.setAttribute("orient", "auto");
+      const minusLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      minusLine.setAttribute("x1", "4");
+      minusLine.setAttribute("y1", "5");
+      minusLine.setAttribute("x2", "12");
+      minusLine.setAttribute("y2", "5");
+      minusLine.setAttribute("stroke", "rgba(226, 232, 240, 0.9)");
+      minusLine.setAttribute("stroke-width", "2.5");
+      minusLine.setAttribute("stroke-linecap", "round");
+      markerUp.appendChild(minusLine);
+      defs.appendChild(markerUp);
+
+      graph.appendChild(defs);
+
+      const gdata = graphData.graphs[perturbation];
+      const edges = (gdata.edges || [])
+        .filter((e) => Math.abs(e.fold_change) >= 1)
+        .sort((a, b) => Math.abs(b.fold_change) - Math.abs(a.fold_change));
       const width = 640;
       const height = 320;
-      const centerX = width / 2;
-      const centerY = height / 2;
-      const nodes = data.nodes.map((id) => ({ id }));
-      const centerNode = nodes.find((n) => n.id === perturbation);
-      const others = nodes.filter((n) => n.id !== perturbation);
-      const radius = Math.min(width, height) * 0.35;
-      others.forEach((n, idx) => {
-        const angle = (2 * Math.PI * idx) / others.length;
-        n.x = centerX + radius * Math.cos(angle);
-        n.y = centerY + radius * Math.sin(angle);
-      });
-      if (centerNode) {
-        centerNode.x = centerX;
-        centerNode.y = centerY;
-      }
 
-      const edges = data.edges.map((e) => ({
-        ...e,
-        source: nodes.find((n) => n.id === e.source),
-        target: nodes.find((n) => n.id === e.target),
-      })).filter((e) => e.source && e.target);
+      const layout = computeLayout(edges, perturbation, width, height);
 
-      const makeLine = (edge) => {
+      edges.forEach((edge) => {
+        const sourcePos = layout.get(edge.source);
+        const targetPos = layout.get(edge.target);
+        if (!sourcePos || !targetPos) return;
+        const isUp = edge.fold_change > 0;
         const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        line.setAttribute("x1", edge.source.x);
-        line.setAttribute("y1", edge.source.y);
-        line.setAttribute("x2", edge.target.x);
-        line.setAttribute("y2", edge.target.y);
-        line.setAttribute("stroke", "rgba(148, 163, 184, 0.6)");
-        line.setAttribute("stroke-width", edge.known ? "1.6" : "1.2");
+        line.setAttribute("x1", sourcePos.x);
+        line.setAttribute("y1", sourcePos.y);
+        line.setAttribute("x2", targetPos.x);
+        line.setAttribute("y2", targetPos.y);
+        line.setAttribute("stroke", "rgba(226, 232, 240, 0.9)");
+        line.setAttribute("stroke-width", edge.known ? "2" : "1.6");
         if (!edge.known) line.setAttribute("stroke-dasharray", "4 3");
-        return line;
-      };
+        line.setAttribute("marker-end", `url(#${isUp ? "arrow-up" : "arrow-down"})`);
+        graph.appendChild(line);
+      });
 
-      edges.forEach((edge) => graph.appendChild(makeLine(edge)));
-
-      const addNode = (node) => {
+      layout.forEach((pos, id) => {
+        const isSelected = id === perturbation;
         const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        g.setAttribute("transform", `translate(${node.x}, ${node.y})`);
+        g.setAttribute("transform", `translate(${pos.x}, ${pos.y})`);
+
+        const radius = (() => {
+          const base = isSelected ? 16 : 11;
+          const byLength = Math.min(10 + id.length * 0.5, 20);
+          return Math.max(base, byLength);
+        })();
 
         const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        circle.setAttribute("r", node.id === perturbation ? "16" : "8.5");
-        circle.setAttribute("fill", node.id === perturbation ? "rgba(148, 163, 184, 0.3)" : "rgba(148, 163, 184, 0.18)");
-        circle.setAttribute("stroke", node.id === perturbation ? "rgba(226, 232, 240, 0.9)" : "rgba(148, 163, 184, 0.6)");
-        circle.setAttribute("stroke-width", node.id === perturbation ? "1.8" : "1");
+        circle.setAttribute("r", radius.toFixed(1));
+        circle.setAttribute("fill", isSelected ? "rgba(255, 255, 255, 0.12)" : "rgba(148, 163, 184, 0.18)");
+        circle.setAttribute("stroke", isSelected ? "rgba(255, 255, 255, 0.95)" : "rgba(148, 163, 184, 0.6)");
+        circle.setAttribute("stroke-width", isSelected ? "2.1" : "1");
         g.appendChild(circle);
 
         const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
         text.setAttribute("text-anchor", "middle");
-        text.setAttribute("y", node.id === perturbation ? "4" : "3");
-        text.setAttribute("fill", "rgba(226, 232, 240, 0.9)");
-        text.setAttribute("font-size", node.id === perturbation ? "11" : "9");
+        text.setAttribute("y", (radius + 13).toFixed(1));
+        text.setAttribute("fill", isSelected ? "rgba(255, 255, 255, 0.95)" : "rgba(226, 232, 240, 0.9)");
+        text.setAttribute("font-size", isSelected ? "11" : "9");
         text.setAttribute("font-family", "Space Grotesk, sans-serif");
-        text.textContent = node.id;
+        if (isSelected) text.setAttribute("font-weight", "700");
+        text.textContent = id;
         g.appendChild(text);
 
-        const outgoing = getOutgoingEdges(node.id);
+        const outgoing = edges.filter((e) => e.source === id);
         g.addEventListener("mouseenter", (evt) => {
-          const preview = outgoing.slice(0, 6).map((edge) => `${edge.target} (${edge.fold_change.toFixed(2)})`).join(", ");
+          const preview = outgoing.slice(0, 5).map((edge) => `${edge.target} (${edge.fold_change.toFixed(2)})`).join(", ");
           graphTooltip.innerHTML = `
-            <div class="font-semibold mb-1 text-slate-50">${node.id}</div>
+            <div class="font-semibold mb-1 text-slate-50">${id}</div>
             <div class="text-slate-200">Outgoing (${outgoing.length || 0}): ${preview || "—"}</div>
           `;
           graphTooltip.style.left = `${evt.offsetX + 12}px`;
@@ -316,31 +450,27 @@
           graphTooltip.style.top = `${evt.offsetY + 12}px`;
         });
         g.addEventListener("mouseleave", () => graphTooltip.classList.add("hidden"));
-        g.addEventListener("click", () => {
-          if (graphData && graphData.graphs[node.id]) {
-            renderGraph(node.id);
-            renderRanking(node.id);
-          }
-        });
 
         graph.appendChild(g);
-      };
-
-      nodes.forEach(addNode);
+      });
     }
 
     datasetSelect.addEventListener("change", async (e) => {
       const file = e.target.value;
+      programData = null;
+      resetPerturbations();
       results.innerHTML = `
         <div class="card rounded-xl px-6 py-6 text-slate-300">
           Loading <span class="text-slate-100 font-semibold">${file || "dataset"}</span>...
         </div>
       `;
+      programResults.innerHTML = '<div class="text-slate-300">Loading program enrichment…</div>';
       setStatus("Fetching dataset…");
       resetGraph();
 
       if (!file) {
-        results.innerHTML = '<div class="card rounded-xl px-6 py-6 text-slate-300">Load a dataset, then click a node to see ranked deconvoluted targets.</div>';
+        results.innerHTML = '<div class="card rounded-xl px-6 py-6 text-slate-300">Load a dataset, then choose a perturbation to see ranked deconvoluted targets.</div>';
+        programResults.innerHTML = '<div class="text-slate-300">Program enrichment (absolute fold-change share) will appear here after selecting a perturbation.</div>';
         setStatus("Waiting for dataset selection.");
         geneCountEl.textContent = "—";
         return;
@@ -355,21 +485,46 @@
         const graphRes = await fetch(`./data/graphs/${graphName}`);
         if (!graphRes.ok) throw new Error(`Graph fetch failed: ${graphRes.status}`);
         graphData = await graphRes.json();
+        availablePerturbations = (graphData.perturbations || []).sort((a, b) => a.localeCompare(b));
 
-        const genes = (graphData.perturbations || []).sort((a, b) => a.localeCompare(b));
+        perturbSelect.innerHTML = '<option value="">Select a perturbation</option>';
+        availablePerturbations.forEach((g) => {
+          const opt = document.createElement("option");
+          opt.value = g;
+          opt.textContent = g;
+          perturbSelect.appendChild(opt);
+        });
+        perturbSelect.disabled = availablePerturbations.length === 0;
+
+        const genes = availablePerturbations;
         geneCountEl.textContent = genes.length ? `${genes.length} perturbations` : "0 perturbations";
 
         if (!genes.length) {
           results.innerHTML = '<div class="card rounded-xl px-6 py-6 text-slate-300">No deconvoluted results found in this dataset.</div>';
           setStatus("No perturbations with deconvoluted targets.");
+          programResults.innerHTML = '<div class="text-slate-300">Program enrichment unavailable.</div>';
           resetGraph();
           return;
         }
 
-        results.innerHTML = '<div class="card rounded-xl px-6 py-6 text-slate-300">Click a node to display its ranked targets.</div>';
-        setStatus("Hover nodes to inspect; click to select perturbation.");
+        const programFile = file.replace("_deconvoluted.json", "_program_enrichment.json");
+        try {
+          const progRes = await fetch(`./data/program_enrichment/${programFile}`);
+          if (!progRes.ok) throw new Error(`Program fetch failed: ${progRes.status}`);
+          programData = await progRes.json();
+        } catch (err) {
+          programData = null;
+          console.warn(err);
+          programResults.innerHTML = '<div class="text-slate-300">Program enrichment unavailable for this dataset.</div>';
+        }
+
+        results.innerHTML = '<div class="card rounded-xl px-6 py-6 text-slate-300">Choose a perturbation to display its ranked targets.</div>';
+        programResults.innerHTML = '<div class="text-slate-300">Select a perturbation to view program enrichment.</div>';
+        setStatus("Select a perturbation to view all outgoing edges with |FC| ≥ 1, fold-change rankings, and program enrichment.");
+        perturbSelect.value = genes[0];
         renderGraph(genes[0]);
         renderRanking(genes[0]);
+        renderPrograms(genes[0]);
       } catch (err) {
         setStatus("Failed to load dataset or graph.");
         geneCountEl.textContent = "—";
@@ -378,7 +533,17 @@
             Could not load ${file}: ${err.message}
           </div>
         `;
+        programResults.innerHTML = '<div class="text-slate-300">Program enrichment unavailable.</div>';
       }
+    });
+
+    perturbSelect.addEventListener("change", (e) => {
+      const gene = e.target.value;
+      if (!gene) return;
+      renderGraph(gene);
+      renderRanking(gene);
+      renderPrograms(gene);
+      setStatus(`Selected perturbation: ${gene}`);
     });
   </script>
 </body>

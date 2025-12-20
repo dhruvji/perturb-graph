@@ -1,0 +1,133 @@
+program_name,program_category,gene_symbol,description
+Mesenchymal_MES,Neftel_Cellular_State,CD44,Cell surface glycoprotein - mesenchymal marker
+Mesenchymal_MES,Neftel_Cellular_State,CHI3L1,Chitinase 3-like 1 (YKL40) - mesenchymal marker
+Mesenchymal_MES,Neftel_Cellular_State,TIMP1,Tissue inhibitor of metalloproteinases
+Mesenchymal_MES,Neftel_Cellular_State,ANXA1,Annexin A1 - inflammation marker
+Mesenchymal_MES,Neftel_Cellular_State,ANXA2,Annexin A2
+Mesenchymal_MES,Neftel_Cellular_State,LGALS1,Galectin-1
+Mesenchymal_MES,Neftel_Cellular_State,LGALS3,Galectin-3
+Mesenchymal_MES,Neftel_Cellular_State,S100A6,S100 calcium binding protein A6
+Mesenchymal_MES,Neftel_Cellular_State,S100A10,S100 calcium binding protein A10
+Mesenchymal_MES,Neftel_Cellular_State,S100A11,S100 calcium binding protein A11
+Mesenchymal_MES,Neftel_Cellular_State,VIM,Vimentin
+Mesenchymal_MES,Neftel_Cellular_State,SERPINE1,Plasminogen activator inhibitor 1
+Mesenchymal_MES,Neftel_Cellular_State,FN1,Fibronectin 1
+Mesenchymal_MES,Neftel_Cellular_State,COL1A2,Collagen type I alpha 2
+Mesenchymal_MES,Neftel_Cellular_State,TGFB1,Transforming growth factor beta 1
+Astrocyte_AC,Neftel_Cellular_State,GFAP,Glial fibrillary acidic protein
+Astrocyte_AC,Neftel_Cellular_State,AQP4,Aquaporin 4
+Astrocyte_AC,Neftel_Cellular_State,ALDOC,Aldolase C
+Astrocyte_AC,Neftel_Cellular_State,SLC1A2,Glutamate transporter EAAT2
+Astrocyte_AC,Neftel_Cellular_State,SLC1A3,Glutamate transporter EAAT1
+Astrocyte_AC,Neftel_Cellular_State,HOPX,Homeodomain-only protein
+Astrocyte_AC,Neftel_Cellular_State,APOE,Apolipoprotein E
+Astrocyte_AC,Neftel_Cellular_State,CLU,Clusterin
+Astrocyte_AC,Neftel_Cellular_State,SPARCL1,SPARC-like 1
+Astrocyte_AC,Neftel_Cellular_State,GJA1,Gap junction protein connexin 43
+Astrocyte_AC,Neftel_Cellular_State,SOX9,SRY-box transcription factor 9
+Astrocyte_AC,Neftel_Cellular_State,NFIA,Nuclear factor I A
+OPC_like,Neftel_Cellular_State,OLIG1,Oligodendrocyte transcription factor 1
+OPC_like,Neftel_Cellular_State,OLIG2,Oligodendrocyte transcription factor 2
+OPC_like,Neftel_Cellular_State,PDGFRA,Platelet derived growth factor receptor alpha
+OPC_like,Neftel_Cellular_State,NKX2-2,NK2 homeobox 2
+OPC_like,Neftel_Cellular_State,SOX10,SRY-box transcription factor 10
+OPC_like,Neftel_Cellular_State,MBP,Myelin basic protein
+OPC_like,Neftel_Cellular_State,PLP1,Proteolipid protein 1
+OPC_like,Neftel_Cellular_State,CNP,2'3'-cyclic nucleotide 3' phosphodiesterase
+OPC_like,Neftel_Cellular_State,CSPG4,Chondroitin sulfate proteoglycan 4 (NG2)
+OPC_like,Neftel_Cellular_State,TNR,Tenascin R
+OPC_like,Neftel_Cellular_State,PLLP,Plasmolipin
+OPC_like,Neftel_Cellular_State,GPR17,G protein-coupled receptor 17
+NPC_like,Neftel_Cellular_State,SOX2,SRY-box transcription factor 2
+NPC_like,Neftel_Cellular_State,SOX4,SRY-box transcription factor 4
+NPC_like,Neftel_Cellular_State,SOX11,SRY-box transcription factor 11
+NPC_like,Neftel_Cellular_State,DCX,Doublecortin
+NPC_like,Neftel_Cellular_State,STMN1,Stathmin 1
+NPC_like,Neftel_Cellular_State,STMN2,Stathmin 2
+NPC_like,Neftel_Cellular_State,DLX1,Distal-less homeobox 1
+NPC_like,Neftel_Cellular_State,DLX2,Distal-less homeobox 2
+NPC_like,Neftel_Cellular_State,DLX5,Distal-less homeobox 5
+NPC_like,Neftel_Cellular_State,DLX6,Distal-less homeobox 6
+NPC_like,Neftel_Cellular_State,CD24,CD24 molecule
+NPC_like,Neftel_Cellular_State,NCAM1,Neural cell adhesion molecule 1
+Stemness_GSC,Cancer_Stem_Cell,SOX2,SRY-box transcription factor 2 - master stemness TF
+Stemness_GSC,Cancer_Stem_Cell,PROM1,Prominin 1 (CD133) - GSC surface marker
+Stemness_GSC,Cancer_Stem_Cell,NES,Nestin - neural stem cell marker
+Stemness_GSC,Cancer_Stem_Cell,OLIG2,Oligodendrocyte transcription factor 2
+Stemness_GSC,Cancer_Stem_Cell,POU3F2,POU class 3 homeobox 2 (BRN2)
+Stemness_GSC,Cancer_Stem_Cell,SALL2,Spalt-like transcription factor 2
+Stemness_GSC,Cancer_Stem_Cell,NANOG,Nanog homeobox
+Stemness_GSC,Cancer_Stem_Cell,POU5F1,POU class 5 homeobox 1 (OCT4)
+Stemness_GSC,Cancer_Stem_Cell,MSI1,Musashi RNA binding protein 1
+Stemness_GSC,Cancer_Stem_Cell,BMI1,BMI1 proto-oncogene polycomb ring finger
+Stemness_GSC,Cancer_Stem_Cell,ID1,Inhibitor of DNA binding 1
+Stemness_GSC,Cancer_Stem_Cell,LGR5,Leucine rich repeat containing GPCR 5
+Stemness_GSC,Cancer_Stem_Cell,ALDH1A3,Aldehyde dehydrogenase 1 family member A3
+Stemness_GSC,Cancer_Stem_Cell,L1CAM,L1 cell adhesion molecule
+Stemness_GSC,Cancer_Stem_Cell,ASCL1,Achaete-scute family bHLH transcription factor 1
+Hypoxia_Response,Microenvironment,HIF1A,Hypoxia inducible factor 1 subunit alpha
+Hypoxia_Response,Microenvironment,EPAS1,Hypoxia inducible factor 2 alpha (HIF2A)
+Hypoxia_Response,Microenvironment,VEGFA,Vascular endothelial growth factor A
+Hypoxia_Response,Microenvironment,CA9,Carbonic anhydrase 9
+Hypoxia_Response,Microenvironment,SLC2A1,Solute carrier family 2 member 1 (GLUT1)
+Hypoxia_Response,Microenvironment,LDHA,Lactate dehydrogenase A
+Hypoxia_Response,Microenvironment,PDK1,Pyruvate dehydrogenase kinase 1
+Hypoxia_Response,Microenvironment,ADM,Adrenomedullin
+Hypoxia_Response,Microenvironment,BNIP3,BCL2 interacting protein 3
+Hypoxia_Response,Microenvironment,NDRG1,N-myc downstream regulated 1
+Hypoxia_Response,Microenvironment,ANGPTL4,Angiopoietin-like 4
+Hypoxia_Response,Microenvironment,PGK1,Phosphoglycerate kinase 1
+Hypoxia_Response,Microenvironment,ENO1,Enolase 1
+Hypoxia_Response,Microenvironment,ENO2,Enolase 2
+Hypoxia_Response,Microenvironment,PFKFB3,6-phosphofructo-2-kinase/fructose-2-6-biphosphatase 3
+Hypoxia_Response,Microenvironment,DDIT4,DNA damage inducible transcript 4
+Hypoxia_Response,Microenvironment,HILPDA,Hypoxia inducible lipid droplet associated (HIG2)
+Cell_Cycle_Proliferation,Proliferation,MKI67,Marker of proliferation Ki-67
+Cell_Cycle_Proliferation,Proliferation,TOP2A,DNA topoisomerase II alpha
+Cell_Cycle_Proliferation,Proliferation,PCNA,Proliferating cell nuclear antigen
+Cell_Cycle_Proliferation,Proliferation,CCNB1,Cyclin B1
+Cell_Cycle_Proliferation,Proliferation,CCNB2,Cyclin B2
+Cell_Cycle_Proliferation,Proliferation,CCNA2,Cyclin A2
+Cell_Cycle_Proliferation,Proliferation,CDK1,Cyclin dependent kinase 1
+Cell_Cycle_Proliferation,Proliferation,AURKA,Aurora kinase A
+Cell_Cycle_Proliferation,Proliferation,AURKB,Aurora kinase B
+Cell_Cycle_Proliferation,Proliferation,PLK1,Polo-like kinase 1
+Cell_Cycle_Proliferation,Proliferation,BUB1,BUB1 mitotic checkpoint serine/threonine kinase
+Cell_Cycle_Proliferation,Proliferation,MCM2,Minichromosome maintenance complex component 2
+Cell_Cycle_Proliferation,Proliferation,MCM6,Minichromosome maintenance complex component 6
+Cell_Cycle_Proliferation,Proliferation,FOXM1,Forkhead box M1
+Cell_Cycle_Proliferation,Proliferation,UBE2C,Ubiquitin conjugating enzyme E2 C
+Invasion_ECM,Invasion,MMP2,Matrix metallopeptidase 2
+Invasion_ECM,Invasion,MMP9,Matrix metallopeptidase 9
+Invasion_ECM,Invasion,MMP14,Matrix metallopeptidase 14
+Invasion_ECM,Invasion,ADAM10,ADAM metallopeptidase domain 10
+Invasion_ECM,Invasion,ADAM17,ADAM metallopeptidase domain 17
+Invasion_ECM,Invasion,PLAU,Plasminogen activator urokinase
+Invasion_ECM,Invasion,PLAUR,Plasminogen activator urokinase receptor
+Invasion_ECM,Invasion,SPARC,Secreted protein acidic and cysteine rich
+Invasion_ECM,Invasion,TNC,Tenascin C
+Invasion_ECM,Invasion,FN1,Fibronectin 1
+Invasion_ECM,Invasion,ITGAV,Integrin subunit alpha V
+Invasion_ECM,Invasion,ITGB3,Integrin subunit beta 3
+Glycolysis_Metabolism,Metabolism,HK2,Hexokinase 2
+Glycolysis_Metabolism,Metabolism,PFKP,Phosphofructokinase platelet
+Glycolysis_Metabolism,Metabolism,ALDOA,Aldolase fructose-bisphosphate A
+Glycolysis_Metabolism,Metabolism,PGK1,Phosphoglycerate kinase 1
+Glycolysis_Metabolism,Metabolism,ENO1,Enolase 1
+Glycolysis_Metabolism,Metabolism,PKM,Pyruvate kinase M1/2
+Glycolysis_Metabolism,Metabolism,LDHA,Lactate dehydrogenase A
+Glycolysis_Metabolism,Metabolism,SLC16A3,Solute carrier family 16 member 3 (MCT4)
+Glycolysis_Metabolism,Metabolism,SLC2A1,Solute carrier family 2 member 1 (GLUT1)
+Glycolysis_Metabolism,Metabolism,SLC2A3,Solute carrier family 2 member 3 (GLUT3)
+Immune_Inflammatory,Immune,STAT3,Signal transducer and activator of transcription 3
+Immune_Inflammatory,Immune,NFKB1,Nuclear factor kappa B subunit 1
+Immune_Inflammatory,Immune,CCL2,C-C motif chemokine ligand 2
+Immune_Inflammatory,Immune,CXCL2,C-X-C motif chemokine ligand 2
+Immune_Inflammatory,Immune,CSF1,Colony stimulating factor 1
+Immune_Inflammatory,Immune,IL6,Interleukin 6
+Immune_Inflammatory,Immune,IL1B,Interleukin 1 beta
+Immune_Inflammatory,Immune,TNFRSF1A,TNF receptor superfamily member 1A
+Immune_Inflammatory,Immune,CD68,CD68 molecule - macrophage marker
+Immune_Inflammatory,Immune,PTPRC,Protein tyrosine phosphatase receptor type C (CD45)
+Immune_Inflammatory,Immune,SPP1,Secreted phosphoprotein 1 (Osteopontin)
+Immune_Inflammatory,Immune,C3,Complement C3

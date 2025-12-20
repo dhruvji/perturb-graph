@@ -38,12 +38,11 @@ def main() -> None:
                 if prev is None or abs(fc) > abs(prev["fold_change"]):
                     fc_map[gene] = {"gene": gene, "fold_change": fc}
 
-            ontology = set()
+            first_hop = set()
             for field in ("reactome", "bp", "cc", "mf"):
                 block = entry.get(field) or {}
-                for key in ("in_hop1", "not_in_hop1"):
-                    for obj in block.get(key) or []:
-                        ontology.add(obj["gene"])
+                for obj in block.get("in_hop1") or []:
+                    first_hop.add(obj["gene"])
 
             edges = []
             for gene, obj in fc_map.items():
@@ -54,7 +53,8 @@ def main() -> None:
                         "source": pert,
                         "target": gene,
                         "fold_change": obj["fold_change"],
-                        "known": gene in ontology,
+                        # Solid line only when the DE gene is in hop 1 for any annotation
+                        "known": gene in first_hop,
                     }
                 )
 
